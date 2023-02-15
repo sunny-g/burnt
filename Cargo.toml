@@ -1,0 +1,12 @@
+[package]
+name = "burnt"
+repository = "https://github.com/sunny-g/burnt"
+readme = "README.md"
+keywords = ["deep-learning", "machine-learning", "tensor", "pytorch", "ndarray"]
+categories = ["science"]
+edition = "2021"
+publish = false
+
+[dependencies]
+burn-core = { version = "0.5.0", path = "../burn-core" }
+burn-train = { version = "0.5.0", path = "../burn-train", optional = true }
