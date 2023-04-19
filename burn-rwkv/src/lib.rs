@@ -1,13 +1,9 @@
 mod error;
-mod generator;
+mod inference;
 mod model;
-mod visitor;
+mod train;
 
-#[path = "safetensors.rs"]
-mod _safetensors;
-
-pub use _safetensors::*;
 pub use error::*;
-pub use generator::*;
+pub use inference::*;
 pub use model::*;
-pub use visitor::*;
+pub use train::*;

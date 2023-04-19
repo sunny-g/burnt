@@ -19,6 +19,7 @@ burn-derive = { workspace = true }
 burn-import = { workspace = true }
 burn-ndarray = { workspace = true }
 # burn-tch = { workspace = true }
+burn-safetensors = { path = "../burn-safetensors" }
 burn-tensor = { workspace = true }
 burn-train = { workspace = true, optional = true }
 

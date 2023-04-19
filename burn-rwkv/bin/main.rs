@@ -2,7 +2,7 @@ extern crate burn_rwkv;
 
 use burn_core::{module::Module, tensor::backend::Backend};
 use burn_ndarray::{NdArrayBackend, NdArrayDevice};
-use burn_rwkv::{Error, Model, ModelConfig, SafeTensorsConfig};
+use burn_rwkv::{Error, Model, ModelConfig, SafeTensorsManifest};
 use clap::Parser;
 use std::{io, path::PathBuf};
 use tokenizers::Tokenizer;

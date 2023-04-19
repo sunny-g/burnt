@@ -1,168 +1,51 @@
-use crate::Error;
+mod error;
+mod manifest;
+
+pub use error::Error;
+pub use manifest::Manifest;
+pub use safetensors::{Dtype, View};
+
 use burn_core::{
     module::{Module, Param, ParamId},
     nn::{
         conv::{Conv1d, Conv2d},
-        Dropout, Embedding, EmbeddingConfig, EmbeddingRecord, LayerNorm, LayerNormConfig,
-        LayerNormRecord, Linear, LinearConfig, LinearRecord,
+        Dropout, EmbeddingRecord, LayerNormRecord, LinearRecord,
     },
-    record::Record,
 };
 use burn_tensor::{
     backend::Backend, BasicOps, Data, Element, ElementConversion, Shape, Tensor, TensorKind,
 };
 use half::{bf16, f16};
-use safetensors::{tensor::TensorView, Dtype, SafeTensors, View};
-use std::{collections::HashMap, fmt::Debug};
 
-trait HasRecord<B: Backend> {
-    type Record: Record;
-}
-impl<B: Backend, const D: usize, K: TensorKind<B>> HasRecord<B> for Tensor<B, D, K>
-where
-    Tensor<B, D, K>: Record,
-{
-    type Record = Self;
-}
-macro_rules! impl_has_record {
-    ($($ty:ty,)*) => { $(
-        impl<B: Backend> HasRecord<B> for $ty {
-            type Record = <Self as Module<B>>::Record;
-        }
-    )* };
-}
-impl_has_record!(
-    // BatchNorm<B>,
-    Conv1d<B>,
-    Conv2d<B>,
-    Dropout,
-    Embedding<B>,
-    // GELU,
-    Linear<B>,
-    LayerNorm<B>,
-    // ReLU,
-);
+///
+pub trait Record<B: Backend>: Sized {
+    type Error: From<Error>;
 
-/*
- * load records from safetensors
- */
-
-pub trait LoadFromSafeTensors<B: Backend>: Sized {
-    fn load<'data>(config: SafeTensorsConfig<B>, st: &SafeTensors<'data>) -> Result<Self, Error>;
+    fn load(manifest: Manifest<B>) -> Result<Self, Self::Error>;
 
     // #[cfg(feature = "std")]
-    // fn load_from_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+    // fn load_from_file(path: impl AsRef<std::path::Path>) -> Result<Self, Self::Error> {
     //     let mmap = Self::open_mmap(path)?;
     //     let st = SafeTensors::deserialize(mmap.as_slice())?;
     //     Self::load(&st)
     // }
 }
 
-macro_rules! impl_load_record {
-    ($(($($sig:tt)*),)*) => { $(
-        $($sig)* {
-            type Record = <Self as Module<B>>::Record;
-        }
-    )* };
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct SafeTensorsConfig<B: Backend> {
-    pub name: Option<String>,
-    pub overrides: Option<HashMap<String, String>>,
-    pub device: Option<B::Device>,
-    // quantizer settings?
-}
-
-impl<B: Backend> SafeTensorsConfig<B> {
-    ///
-    pub fn name(&self) -> &str {
-        let orig = self.name.as_ref().unwrap();
-        self.overrides
-            .as_ref()
-            .and_then(|o| o.get(orig))
-            .unwrap_or(orig)
-    }
-
-    /// Scopes the config's current `name`
-    pub fn scoped(&self, next: impl AsRef<str>) -> Self {
-        let scope = self.name.as_ref().map_or_else(
-            || next.as_ref().into(),
-            |scope| format!("{}.{}", scope, next.as_ref()),
-        );
-        Self {
-            name: Some(scope),
-            overrides: self.overrides.clone(),
-            device: self.device.clone(),
-        }
-    }
-
-    /// Scopes the config's current `name`, and configures overrides for the
-    /// associated module's fields, such that their names match what is
-    /// serialized in the underlying `SafeTensors` file.
-    pub fn with_scoped_overrides<'a>(
-        &self,
-        next: impl AsRef<str>,
-        overrides: impl IntoIterator<Item = (&'a str, &'a str)>,
-    ) -> Self {
-        let mut out = self.scoped(next);
-        let name = out.name();
-        out.overrides = Some(
-            overrides
-                .into_iter()
-                .map(|(a, b)| (format!("{}.{}", name, a), format!("{}.{}", name, b)))
-                .collect(),
-        );
-        out
-    }
-
-    /// Sets the target device for the loaded tensors.
-    pub fn with_device(mut self, device: B::Device) -> Self {
-        self.device = Some(device);
-        self
-    }
-
-    pub fn load<T: LoadFromSafeTensors<B>>(self, st: &SafeTensors) -> Result<T, Error> {
-        T::load(self, &st)
-    }
-
-    #[cfg(feature = "std")]
-    pub fn load_from_file<T: LoadFromSafeTensors<B>>(
-        self,
-        path: impl AsRef<std::path::Path>,
-    ) -> Result<T, Error> {
-        let mmap = Self::open_mmap(path)?;
-        let st = SafeTensors::deserialize(mmap.as_slice())?;
-        T::load(self, &st)
-    }
-
-    fn open_mmap(path: impl AsRef<std::path::Path>) -> Result<mmap_rs::Mmap, Error> {
-        use mmap_rs::{MmapFlags as Flags, MmapOptions as Opts};
-
-        let f = std::fs::File::open(path)?;
-        let len = f.metadata()?.len();
-        Ok(unsafe {
-            Opts::new(len as usize)?
-                .with_file(f, 0)
-                .with_flags(Flags::NO_CORE_DUMP)
-                .map()?
-        })
-    }
-}
-
 /*
  * impls
  */
 
-impl<B, const D: usize, K> LoadFromSafeTensors<B> for Tensor<B, D, K>
+impl<B, const D: usize, K> Record<B> for Tensor<B, D, K>
 where
     B: Backend,
     K: TensorKind<B> + BasicOps<B>,
     K::Elem: Element,
 {
-    fn load<'data>(config: SafeTensorsConfig<B>, st: &SafeTensors<'data>) -> Result<Self, Error> {
-        let name = config.name();
-        let view = st.tensor(name)?;
+    type Error = Error;
+
+    fn load(manifest: Manifest<B>) -> Result<Self, Self::Error> {
+        let name = manifest.current_name();
+        let view = manifest.current_tensor()?;
 
         // FIXME: should we be squeezing? this assumes single dims are at the start
         let shape = {
@@ -174,13 +57,15 @@ where
         };
 
         let dtype = view.dtype();
+        let dsize = dtype.size();
         debug_assert_eq!(
+            shape.num_elements() * dsize,
             (&view).data_len(),
-            shape.num_elements() * dtype.size(),
-            "unexpected tensor length",
+            "unexpected tensor length (bytes)",
         );
 
-        let iter = view.data().chunks(dtype.size());
+        let iter = view.data().chunks(dsize);
+        // FIXME: assumes little-endian and probably other things about layout
         let val = match dtype {
             Dtype::F16 => iter
                 .map(|b| f16::from_le_bytes([b[0], b[1]]))
@@ -194,7 +79,7 @@ where
         };
 
         let data = Data::new(val, shape);
-        if let Some(device) = config.device {
+        if let Some(device) = manifest.device() {
             Ok(Tensor::from_data_device(data, &device))
         } else {
             Ok(Tensor::from_data(data))
@@ -202,21 +87,25 @@ where
     }
 }
 
-impl<B, const D: usize, K> LoadFromSafeTensors<B> for Param<Tensor<B, D, K>>
+impl<B, const D: usize, K> Record<B> for Param<Tensor<B, D, K>>
 where
     B: Backend,
     K: TensorKind<B> + BasicOps<B>,
     K::Elem: Element,
 {
-    fn load<'data>(config: SafeTensorsConfig<B>, st: &SafeTensors<'data>) -> Result<Self, Error> {
-        let id = ParamId::from(config.name());
-        Ok(Param::new(id, config.load(st)?))
+    type Error = Error;
+
+    fn load(manifest: Manifest<B>) -> Result<Self, Self::Error> {
+        let id = ParamId::from(manifest.current_name());
+        Ok(Param::new(id, manifest.load()?))
     }
 }
 
-impl<B: Backend> LoadFromSafeTensors<B> for EmbeddingRecord<B> {
-    fn load<'data>(config: SafeTensorsConfig<B>, st: &SafeTensors<'data>) -> Result<Self, Error> {
-        let weight = config.scoped("weight").load::<Param<Tensor<B, 2>>>(st)?;
+impl<B: Backend> Record<B> for EmbeddingRecord<B> {
+    type Error = Error;
+
+    fn load(manifest: Manifest<B>) -> Result<Self, Self::Error> {
+        let weight = manifest.scoped("weight").load::<Param<Tensor<B, 2>>>()?;
         // let [n_embedding, d_model] = weight.shape().dims;
 
         Ok(EmbeddingRecord { weight })
@@ -224,22 +113,26 @@ impl<B: Backend> LoadFromSafeTensors<B> for EmbeddingRecord<B> {
 }
 
 // FIXME: better handling of missing bias
-impl<B: Backend> LoadFromSafeTensors<B> for LinearRecord<B> {
-    fn load<'data>(config: SafeTensorsConfig<B>, st: &SafeTensors<'data>) -> Result<Self, Error> {
-        let weight = config.scoped("weight").load::<Param<Tensor<B, 2>>>(st)?;
-        let bias = config.scoped("bias").load(st).ok();
+impl<B: Backend> Record<B> for LinearRecord<B> {
+    type Error = Error;
+
+    fn load(manifest: Manifest<B>) -> Result<Self, Self::Error> {
+        let weight = manifest.scoped("weight").load::<Param<Tensor<B, 2>>>()?;
+        let bias = manifest.scoped("bias").load().ok();
         // let [d_input, d_output] = weight.shape().dims;
 
-        Ok(LinearRecord { weight, bias })
+        Ok(Self { weight, bias })
     }
 }
 
-impl<B: Backend> LoadFromSafeTensors<B> for LayerNormRecord<B> {
-    fn load<'data>(config: SafeTensorsConfig<B>, st: &SafeTensors<'data>) -> Result<Self, Error> {
-        let gamma = config.scoped("gamma").load::<Param<Tensor<B, 1>>>(st)?;
-        let beta = config.scoped("beta").load(st)?;
+impl<B: Backend> Record<B> for LayerNormRecord<B> {
+    type Error = Error;
 
-        Ok(LayerNormRecord {
+    fn load(manifest: Manifest<B>) -> Result<Self, Self::Error> {
+        let gamma = manifest.scoped("gamma").load::<Param<Tensor<B, 1>>>()?;
+        let beta = manifest.scoped("beta").load()?;
+
+        Ok(Self {
             gamma,
             beta,
             epsilon: (),
@@ -250,6 +143,42 @@ impl<B: Backend> LoadFromSafeTensors<B> for LayerNormRecord<B> {
 /*
  * safetensors/burn tensor compatibility
  */
+
+// macro_rules! impl_load_record {
+//     ($(($($sig:tt)*),)*) => { $(
+//         $($sig)* {
+//             type Record = <Self as Module<B>>::Record;
+//         }
+//     )* };
+// }
+
+// trait HasRecord<B: Backend> {
+//     type Record: Record;
+// }
+// impl<B: Backend, const D: usize, K: TensorKind<B>> HasRecord<B> for Tensor<B, D, K>
+// where
+//     Tensor<B, D, K>: Record,
+// {
+//     type Record = Self;
+// }
+// macro_rules! impl_has_record {
+//     ($($ty:ty,)*) => { $(
+//         impl<B: Backend> HasRecord<B> for $ty {
+//             type Record = <Self as Module<B>>::Record;
+//         }
+//     )* };
+// }
+// impl_has_record!(
+//     // BatchNorm<B>,
+//     Conv1d<B>,
+//     Conv2d<B>,
+//     Dropout,
+//     Embedding<B>,
+//     // GELU,
+//     Linear<B>,
+//     LayerNorm<B>,
+//     // ReLU,
+// );
 
 // struct ModuleLoader
 

@@ -3,15 +3,17 @@ use thiserror::Error;
 ///
 #[derive(Debug, Error)]
 pub enum Error {
-    #[cfg(feature = "std")]
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("SafeTensors error: {0}")]
-    SafeTensors(#[from] burn_safetensors::Error),
+    #[error("mmap error: {0}")]
+    Mmap(#[from] mmap_rs::Error),
 
-    #[error("tokenizers error: {0}")]
-    Tokenizers(#[from] tokenizers::tokenizer::Error),
+    #[error("SafeTensors error: {0}")]
+    SafeTensors(#[from] safetensors::tensor::SafeTensorError),
+
+    #[error("tensor not found: {0}")]
+    TensorNotFound(String),
 
     #[error("invalid format for tensor `{0}`: {1}")]
     InvalidFormat(String, String),
@@ -42,7 +44,6 @@ impl From<core::array::TryFromSliceError> for Error {
 impl From<Error> for std::io::Error {
     fn from(error: Error) -> Self {
         match error {
-            #[cfg(feature = "std")]
             Error::Io(e) => e,
             _ => Self::new(std::io::ErrorKind::Other, error),
         }

@@ -2,8 +2,9 @@
 members = [
   "burn-ggml",
   # "burn-llama",
-  "burn-lambda",
+  # "burn-lambda",
   "burn-rwkv",
+  "burn-safetensors",
 ]
 exclude = [
   "vendor/burn",
