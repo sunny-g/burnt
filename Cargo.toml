@@ -1,12 +1,66 @@
-[package]
-name = "burnt"
-repository = "https://github.com/sunny-g/burnt"
-readme = "README.md"
-keywords = ["deep-learning", "machine-learning", "tensor", "pytorch", "ndarray"]
-categories = ["science"]
-edition = "2021"
-publish = false
+[workspace]
+members = [
+  "burn-ggml",
+  # "burn-llama",
+  "burn-lambda",
+  "burn-rwkv",
+]
+exclude = [
+  "vendor/burn",
+  "vendor/llama-rs",
+  "vendor/rwkvk-rs",
+  "vendor/smolrsrwkv",
+]
 
-[dependencies]
-burn-core = { version = "0.5.0", path = "../burn-core" }
-burn-train = { version = "0.5.0", path = "../burn-train", optional = true }
+[workspace.dependencies]
+burn = { path = "vendor/burn/burn" }
+burn-autodiff = { path = "vendor/burn/burn-autodiff" }
+burn-core = { path = "vendor/burn/burn-core" }
+burn-derive = { path = "vendor/burn/burn-derive" }
+burn-import = { path = "vendor/burn/burn-import" }
+burn-ndarray = { path = "vendor/burn/burn-ndarray" }
+burn-tch = { path = "vendor/burn/burn-tch" }
+burn-tensor = { path = "vendor/burn/burn-tensor" }
+burn-train = { path = "vendor/burn/burn-train" }
+# hf libs
+safetensors = "0.3"
+tokenizers = "0.13.2"
+half = "2.2"
+# rust_tokenizers = "8"
+# rust-bert = "0.20"
+# impls
+# nxml = { path = "vendor/nxml" }
+ggml = { path = "vendor/llama-rs/ggml" }
+llama-rs = { path = "vendor/llama-rs/llama-rs" }
+rwkvk-rs = { path = "vendor/rwkvk-rs" }
+smolrwkv = { path = "vendor/smolrsrwkv/smolrwkv" }
+
+# [package]
+# name = "burnt"
+# version = "0.0.1"
+# repository = "https://github.com/sunny-g/burnt"
+# readme = "README.md"
+# keywords = ["deep-learning", "machine-learning", "tensor", "pytorch", "ndarray"]
+# categories = ["science"]
+# edition = "2021"
+# publish = false
+
+# [lib]
+# path = "src/lib.rs"
+
+# [dependencies]
+# burn = { workspace = true }
+# burn-autodiff = { workspace = true }
+# burn-core = { workspace = true }
+# burn-ndarray = { workspace = true }
+# # burn-tch = { workspace = true }
+# burn-tensor = { workspace = true }
+# burn-train = { workspace = true, optional = true }
+# # hf
+# half = { workspace = true }
+# tokenizers = { workspace = true }
+# safetensors = { workspace = true }
+# # impls
+# nxml = { workspace = true }
+# rwkvk-rs = { workspace = true }
+# smolrwkv = { workspace = true }

@@ -1,0 +1,6 @@
+[submodule "burn-coreml/coremltools"]
+	path = burn-coreml/coremltools
+	url = https://github.com/apple/coremltools
+[submodule "vendor/burn"]
+	path = vendor/burn
+	url = git@github.com:sunny-g/burn.git

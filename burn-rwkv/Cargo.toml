@@ -1,0 +1,40 @@
+[package]
+name = "burn-rwkv"
+version = "0.0.1"
+edition = "2021"
+
+[[bin]]
+name = "rwkv"
+path = "bin/main.rs"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+burn = { workspace = true }
+burn-autodiff = { workspace = true }
+burn-core = { workspace = true }
+burn-derive = { workspace = true }
+burn-import = { workspace = true }
+burn-ndarray = { workspace = true }
+# burn-tch = { workspace = true }
+burn-tensor = { workspace = true }
+burn-train = { workspace = true, optional = true }
+
+# hf, libs
+half = { workspace = true }
+safetensors = { workspace = true }
+tokenizers = { workspace = true }
+# rust_tokenizers = { workspace = true }
+# rust-bert = { workspace = true }
+# impls
+# nxml = { workspace = true }
+rwkvk-rs = { workspace = true }
+smolrwkv = { workspace = true }
+
+clap = { version = "4.2", features = ["derive"] }
+mmap-rs = "0.5"
+rayon = "1.7"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
